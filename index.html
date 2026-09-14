@@ -1324,6 +1324,15 @@ body.display-only .bv { grid-template-columns: minmax(0, 1fr) 400px; }
 .bib-chip.on {
   border-style: solid; border-color: var(--bib);
   background: var(--bib); color: var(--bib-ink);
+  /* Un point, pas une étiquette : la tuile porte déjà la couleur, et le
+     prénom a besoin de toute la largeur. */
+  min-width: 18px; width: 18px; height: 18px; min-height: 18px; padding: 0;
+}
+/* SAUF s'il porte une autre couleur que ses coéquipiers — là, c'est une
+   information, et elle s'écrit. */
+.bib-chip.odd {
+  min-width: 34px; width: auto; height: auto; min-height: 24px; padding: 0 6px;
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--bib);
 }
 .bib-chip:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
 
@@ -1683,6 +1692,44 @@ body.display-only .bv { grid-template-columns: minmax(0, 1fr) 400px; }
 
 /* ÉLÈVES SÉLECTIONNÉS — toutes les tuiles deviennent des cibles. */
 .char-tile.ready { border-color: var(--sky); border-style: dashed; }
+
+/* =====================================================================
+   LE PERSONNAGE PREND LA COULEUR DU CHASUBLE DE SES COUREURS.
+   C'est le retour qui manquait à l'attribution : on touche bleu, deux
+   élèves, puis le personnage — et le personnage devient bleu. La grille
+   entière dit alors d'un coup d'œil qui est habillé.
+   ===================================================================== */
+.char-tile.has-bib {
+  background: var(--bib); border-color: var(--bib);
+  color: var(--bib-ink);
+}
+.char-tile.has-bib .char-face,
+.char-tile.has-bib .char-name,
+.char-tile.has-bib .char-sub { color: var(--bib-ink); }
+.char-tile.has-bib .char-sub { opacity: .78; }
+.char-tile.has-bib .char-face .pin { opacity: 1; filter: none; }
+/* La liste des élèves reste sur un fond neutre : c'est là qu'on lit des
+   prénoms et qu'on touche des boutons, la couleur y nuirait. */
+.char-tile.has-bib .char-members {
+  background: var(--card); color: var(--ink);
+  border-top: 2px solid color-mix(in srgb, var(--bib) 60%, transparent);
+}
+.char-tile.has-bib .char-edit { color: var(--bib-ink); }
+
+/* COULEURS DIFFÉRENTES DANS LA MÊME ÉQUIPE : on montre les deux plutôt
+   que d'en choisir une. Une bande, pas un fond — le désaccord se voit
+   sans rendre le texte illisible. */
+.char-tile.multibib { border-color: transparent; }
+.char-tile.multibib::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 6px;
+  background: var(--bibs); z-index: 2;
+}
+.char-tile.multibib .char-face { padding-top: 20px; }
+
+/* EN COURSE MAIS SANS ÉLÈVE — il sera retiré au départ. On le montre
+   éteint pendant qu'il est encore temps de lui donner des coureurs. */
+.char-tile.vide { border-style: dashed; opacity: .72; }
+.char-tile.vide .char-sub { color: var(--accent); opacity: 1; }
 .char-tile.ready .char-sub { color: var(--sky); opacity: 1; }
 .char-tile.ready:hover, .char-tile.on:hover { transform: translateY(-2px); }
 .char-face:active { transform: translateY(1px); }
@@ -1701,11 +1748,14 @@ body.display-only .bv { grid-template-columns: minmax(0, 1fr) 400px; }
   padding: 0 8px 10px;
 }
 .mchip {
-  display: flex; align-items: center; gap: 5px;
-  padding: 4px 5px 4px 7px; border-radius: 999px;
+  /* LE PRÉNOM D'ABORD. Rang, pastille et boutons se serrent ; c'est le
+     prénom qu'on lit, et une tuile fait 170 px de large. */
+  display: flex; align-items: center; gap: 3px;
+  padding: 4px 4px 4px 6px; border-radius: 999px;
   background: var(--card-2); font-size: .82rem; font-weight: 700;
   min-height: 30px;
 }
+.mchip .mini { min-width: 24px; min-height: 24px; padding: 0 3px; font-size: .72rem; }
 .mrank {
   font-family: var(--font-mono); font-size: .62rem; font-weight: 700;
   color: var(--muted); flex: 0 0 auto;
@@ -8302,14 +8352,20 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
       }
       c.setAttribute('aria-pressed', String(on));
       c.addEventListener('click', function () {
-        /* UNE COULEUR ARMÉE PREND LA MAIN. Le mode est annoncé juste
-           au-dessus et la couleur est la seule allumée : on ne se
-           retrouve pas à peindre en croyant sélectionner. */
-        if (UI.peindre(state, [name])) return;
+        /* UN SEUL GESTE, DEUX EFFETS — et c'est ce qui rend la chose
+           évidente : « je touche bleu, je touche deux élèves, je touche
+           leur personnage ».
+
+           Peindre NE REMPLACE PAS sélectionner. C'était l'erreur : les
+           élèves devenaient bleus sans être sélectionnés, et le toucher
+           suivant sur un personnage le mettait au repos au lieu de les
+           accueillir. Le toucher sélectionne comme avant, et la couleur
+           armée les habille au passage. */
         var s = picked().slice();
         var i = s.indexOf(name);
         if (i >= 0) s.splice(i, 1); else s.push(name);
         UI.picked = s;
+        if (state.bibArmed && i < 0) { UI.peindre(state, [name]); return; }
         UI.renderTeams(state);
       });
       chips.appendChild(c);
@@ -8499,14 +8555,23 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
 
   /* La pastille d'un élève, dans la tuile de son personnage. Elle ouvre
      le choix de couleur, et affiche celle qu'il porte. */
-  UI.bibChip = function (state, name) {
+  /* LA PASTILLE D'UN ÉLÈVE — un point, plus un mot.
+
+     Depuis que la TUILE porte la couleur de l'équipe, écrire « BLE » à
+     côté de chaque prénom ne dit rien de neuf : ça ne fait que voler la
+     place au prénom, qui est la seule chose qu'on lit vraiment. La
+     pastille redevient donc un point, et elle n'attire l'œil que dans le
+     cas qui le mérite : un élève dont la couleur DIFFÈRE de celle de ses
+     coéquipiers. Elle reste le chemin pour en changer un seul.        */
+  UI.bibChip = function (state, name, couleurEquipe) {
     var bib = E.bibColor(E.bibOf(state, name));
-    var b = el('button', 'bib-chip' + (bib ? ' on' : ''));
+    var different = bib && couleurEquipe && bib.key !== couleurEquipe.key;
+    var b = el('button', 'bib-chip' + (bib ? ' on' : '') + (different ? ' odd' : ''));
     b.type = 'button';
     if (bib) {
       b.style.setProperty('--bib', bib.hex);
       b.style.setProperty('--bib-ink', bib.ink);
-      b.textContent = bib.name.slice(0, 3);
+      b.textContent = different ? bib.name.slice(0, 3) : '';
       b.title = name + ' porte le dossard ' + bib.name;
     } else {
       b.textContent = '＋';
@@ -8596,10 +8661,39 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
       var actif = !!equipe;
       var membres = (equipe && equipe.members) || [];
 
+      /* LA COULEUR DU CHASUBLE HABILLE LE PERSONNAGE.
+
+         C'est le retour dont l'attribution manquait : on touche bleu, on
+         touche deux élèves, on touche leur personnage — et le personnage
+         devient bleu. On voit alors d'un coup d'œil, sur la grille
+         entière, qui est habillé et qui ne l'est pas.
+
+         Si les membres portent des couleurs différentes, on ne choisit
+         pas à leur place : la tuile montre les deux, en bandes. Aucune
+         information n'est perdue et le désaccord se voit.             */
+      var couleurs = [];
+      membres.forEach(function (n) {
+        var cb = E.bibColor(E.bibOf(state, n));
+        if (cb && couleurs.indexOf(cb) < 0) couleurs.push(cb);
+      });
+      var uniforme = couleurs.length === 1 ? couleurs[0] : null;
+
       var tuile = el('div', 'char-tile' + (actif ? ' on' : '') +
                              (fige ? ' fige' : '') +
+                             (uniforme ? ' has-bib' : '') +
+                             (couleurs.length > 1 ? ' multibib' : '') +
                              (sel.length && !fige ? ' ready' : ''));
       tuile.dataset.char = c.key;
+      if (uniforme) {
+        tuile.style.setProperty('--bib', uniforme.hex);
+        tuile.style.setProperty('--bib-ink', uniforme.ink);
+      } else if (couleurs.length > 1) {
+        var pas = Math.round(100 / couleurs.length);
+        var bandes = couleurs.map(function (cb, i) {
+          return cb.hex + ' ' + (i * pas) + '% ' + ((i + 1) * pas) + '%';
+        }).join(', ');
+        tuile.style.setProperty('--bibs', 'linear-gradient(90deg, ' + bandes + ')');
+      }
 
       /* Le portrait, sans pastille de couleur : c'est le personnage
          qu'on reconnaît, pas une gommette. */
@@ -8619,11 +8713,15 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
         avatarFit: (equipe && equipe.avatarFit) || c.avatarFit || null
       }, 62, true));
       face.appendChild(el('span', 'char-name', (equipe && equipe.name) || c.name || c.key));
+      /* UN PERSONNAGE EN COURSE SANS ÉLÈVE NE PRENDRA PAS LE DÉPART :
+         il est retiré au lancement. Autant le dire ici, pendant qu'il est
+         encore temps de lui donner des coureurs. */
+      if (actif && !membres.length) tuile.classList.add('vide');
       face.appendChild(el('span', 'char-sub',
         !actif ? 'au repos'
         : (sel.length && !fige) ? '＋ ' + sel.length + ' ici'
         : membres.length ? membres.length + (membres.length > 1 ? ' élèves' : ' élève')
-        : 'aucun élève'));
+        : 'pas au départ'));
       face.addEventListener('click', function () { UI.toucherPersonnage(state, c.key); });
       tuile.appendChild(face);
 
@@ -8652,7 +8750,7 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
           m.appendChild(nom);
           /* Le dossard se donne ici : c'est le moment où l'enseignant
              regarde ses élèves un par un. */
-          if (!fige) m.appendChild(UI.bibChip(state, name));
+          if (!fige) m.appendChild(UI.bibChip(state, name, uniforme));
           if (relais && i > 0) {
             var up = el('button', 'mini', '↑');
             up.type = 'button'; up.title = 'Faire courir plus tôt'; up.disabled = fige;
@@ -8729,11 +8827,14 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
       return;
     }
 
-    /* SANS SÉLECTION, UNE COULEUR ARMÉE HABILLE TOUTE L'ÉQUIPE.
+    /* UNE COULEUR ARMÉE NE MET JAMAIS UN PERSONNAGE AU REPOS.
+       Mettre au repos est destructeur et c'est le geste le plus proche :
+       tant qu'une couleur est en main, le toucher ne peut que teinter.
        La couleur reste stockée par élève — le geste est collectif, la
        donnée ne l'est pas : on peut toujours en changer un seul après. */
-    if (state.bibArmed && equipe && equipe.members.length) {
-      UI.peindre(state, equipe.members.slice());
+    if (state.bibArmed && equipe) {
+      if (equipe.members.length) { UI.peindre(state, equipe.members.slice()); return; }
+      UI.toast(equipe.name + ' n’a aucun élève — sélectionnez-les d’abord.');
       return;
     }
 
@@ -14197,28 +14298,26 @@ window.SPORTOFOLY_GRAINE = {"format":"sportofoly-mariokart-backup","version":1,"
        suivantes.                                                       */
     var vides = s.teams.filter(function (t) { return !(t.members || []).length; });
     if (vides.length) {
+      /* PAS DE QUESTION. Un personnage sans coureur n'a rien à décider :
+         il n'entre ni dans la course, ni dans le plateau, ni dans les
+         statistiques. On le retire et on le DIT — une fenêtre à valider
+         serait un obstacle de plus avant un départ, et la réponse serait
+         toujours la même.
+
+         Ce n'était pas qu'une carte inutile : une équipe vide reste case
+         0 donc dernière, et les catégories de dés se calculent sur
+         l'effectif (`tierBounds`). Trois vides sur onze, ce sont trois
+         places de Bronze prises par personne — et les vraies dernières
+         privées des gros bonus qui leur revenaient.
+
+         Rien n'est perdu : le personnage, son nom et son image
+         reviennent à l'étape Équipes pour les séances suivantes. */
       var noms = vides.map(function (t) { return t.name; });
-      var partir = function () {
-        UI.appliquerPersonnages(s, E.charactersInPlay(s).filter(function (k) {
-          return vides.every(function (t) { return t.character !== k; });
-        }));
-        lancerLaCourse();
-      };
-      UI.confirm({
-        eyebrow: 'Ligne de départ',
-        title: noms.length > 1
-          ? noms.length + ' personnages n’ont aucun coureur'
-          : noms[0] + ' n’a aucun coureur',
-        text: noms.join(', ') + ' — ' + (noms.length > 1 ? 'ils restent' : 'il reste') +
-              ' au repos pour cette séance. Sans coureur, ' +
-              (noms.length > 1 ? 'ils resteraient' : 'il resterait') +
-              ' case 0 et prendrait' + (noms.length > 1 ? 'ent' : '') +
-              ' les gros bonus destinés aux dernières équipes. Le personnage, ' +
-              'son nom et son image sont conservés.',
-        yesLabel: 'Partir sans ' + (noms.length > 1 ? 'eux' : 'lui'),
-        noLabel: 'Revenir aux équipes'
-      }, partir);
-      return;
+      UI.appliquerPersonnages(s, E.charactersInPlay(s).filter(function (k) {
+        return vides.every(function (t) { return t.character !== k; });
+      }));
+      UI.toast(noms.join(', ') + ' — aucun coureur, ' +
+               (noms.length > 1 ? 'ils ne prennent' : 'il ne prend') + ' pas le départ.');
     }
     lancerLaCourse();
   });
