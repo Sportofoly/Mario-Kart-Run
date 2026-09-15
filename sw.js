@@ -4,7 +4,7 @@
    d'afficher le jeu reviendrait à dépendre d'une connexion qu'on n'a pas.
    Une nouvelle version est récupérée en arrière-plan et prend la main à
    l'ouverture suivante, jamais au milieu d'une séance. */
-var CACHE = 'sportofoly-v01831c2b08';
+var CACHE = 'sportofoly-v3f58a1e4ea';
 var FICHIERS = ['./', './index.html', './manifest.webmanifest',
                 './icone-180.png', './icone-192.png', './icone-512.png'];
 
