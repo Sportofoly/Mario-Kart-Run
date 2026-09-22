@@ -4,13 +4,48 @@
    d'afficher le jeu reviendrait à dépendre d'une connexion qu'on n'a pas.
    Une nouvelle version est récupérée en arrière-plan et prend la main à
    l'ouverture suivante, jamais au milieu d'une séance. */
-var CACHE = 'sportofoly-v131c154ec8';
+var CACHE = 'sportofoly-v56637fb354';
+var VERSION = 'v56637fb354';
 var FICHIERS = ['./', './index.html', './manifest.webmanifest',
                 './icone-180.png', './icone-192.png', './icone-512.png'];
 
+/* L'INSTALLATION NE DOIT JAMAIS METTRE EN CACHE L'ANCIENNE PAGE.
+
+   C'ÉTAIT LE BUG, et il était invisible : `cache.addAll()` lance des
+   requêtes ORDINAIRES. GitHub Pages répond `max-age=600` sur chaque
+   fichier, et son réseau de diffusion garde lui aussi une copie
+   quelques minutes. Le navigateur découvrait donc le nouveau `sw.js`
+   (grâce à `updateViaCache: none`), l'installait, changeait de version
+   — et remplissait son cache neuf avec l'ANCIEN `index.html`, servi de
+   mémoire. L'empreinte changeait, l'application non. Il fallait
+   attendre, puis recharger encore, sans savoir pourquoi.
+
+   Deux verrous, et il faut les deux :
+     `cache: 'reload'` ignore le cache HTTP du navigateur ;
+     `?v=<empreinte>` rend l'adresse unique, donc invisible pour le
+       cache du réseau de diffusion — il n'a rien à en servir.
+   On range ensuite la réponse SOUS L'ADRESSE SANS QUESTION : c'est
+   celle que la page demandera. */
+function telechargerFrais(c, url) {
+  var frais = new Request(url + (url.indexOf('?') < 0 ? '?v=' : '&v=') + VERSION,
+                          { cache: 'reload' });
+  return fetch(frais).then(function (rep) {
+    if (!rep || !rep.ok) throw new Error('hs');
+    return c.put(url, rep);
+  });
+}
+
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE)
-    .then(function (c) { return c.addAll(FICHIERS); })
+    .then(function (c) {
+      return Promise.all(FICHIERS.map(function (f) {
+        /* Une icône manquante ne doit pas faire échouer l'installation
+           entière : c'est la PAGE qui compte. */
+        return telechargerFrais(c, f).catch(function () {
+          return c.add(f).catch(function () {});
+        });
+      }));
+    })
     .then(function () { return self.skipWaiting(); }));
 });
 
